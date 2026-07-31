@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absensi Operator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exifr/7.1.3/lite.umd.js"></script>
+<style>
+  :root{
+    --bg: #12161B;
+    --panel: #1B2129;
+    --panel-2: #212832;
+    --line: #2C3440;
+    --amber: #F5A623;
+    --amber-dim: #8a6a2c;
+    --green: #4ECCA3;
+    --red: #E5586B;
+    --text: #ECEFF3;
+    --muted: #8A93A0;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1c232c 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Archivo', system-ui, sans-serif;
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+  .wrap{max-width:460px;margin:0 auto;}
+
+  /* header / punch clock */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .brand{display:flex;flex-direction:column;}
+  .brand .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;letter-spacing:.14em;color:var(--amber);
+    text-transform:uppercase;margin-bottom:2px;
+  }
+  .brand h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em;}
+  .clock{
+    font-family:'JetBrains Mono',monospace;
+    font-size:20px;font-weight:700;color:var(--text);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:8px 12px;
+    text-align:right;
+    min-width:104px;
+  }
+  .clock .date{display:block;font-size:10px;color:var(--muted);font-weight:400;margin-top:2px;}
+
+  /* card */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::before{
+    content:"";
+    position:absolute;top:0;left:0;right:0;height:4px;
+    background:repeating-linear-gradient(90deg, var(--amber) 0 10px, transparent 10px 18px);
+    opacity:.55;
+  }
+
+  label{
+    display:block;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em;
+    margin:0 0 6px;
+  }
+  .field{margin-bottom:16px;}
+
+  select, input[type="file"]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:'Archivo',sans-serif;
+    font-size:15px;
+    padding:12px 14px;
+    border-radius:10px;
+    appearance:none;
+    -webkit-appearance:none;
+  }
+  select:focus, input:focus{outline:2px solid var(--amber); outline-offset:1px;}
+  .select-wrap{position:relative;}
+  .select-wrap::after{
+    content:"▾"; position:absolute; right:14px; top:50%; transform:translateY(-50%);
+    color:var(--muted); pointer-events:none; font-size:13px;
+  }
+
+  /* segmented control */
+  .segmented{
+    display:flex; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:4px; gap:4px;
+  }
+  .segmented button{
+    flex:1; border:none; background:transparent; color:var(--muted);
+    font-family:'Archivo',sans-serif; font-weight:700; font-size:14px;
+    padding:10px 0; border-radius:7px; cursor:pointer;
+    transition:.15s;
+  }
+  .segmented button.active.masuk{background:var(--green); color:#0d1b16;}
+  .segmented button.active.keluar{background:var(--amber); color:#231602;}
+
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;}
+  .hint.warn{color:var(--red);}
+  .hint.ok{color:var(--green);}
+
+  .std-box{
+    background:var(--panel-2); border:1px dashed var(--line);
+    border-radius:10px; padding:10px 12px; font-family:'JetBrains Mono',monospace;
+    font-size:12.5px; color:var(--muted); margin-top:10px; display:none;
+  }
+  .std-box b{color:var(--text);}
+
+  /* file upload */
+  .upload-box{
+    border:1.5px dashed var(--line); border-radius:12px;
+    padding:18px; text-align:center; cursor:pointer;
+    background:var(--panel-2); position:relative;
+  }
+  .upload-box input[type=file]{
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+  }
+  .upload-box .ico{font-size:26px; margin-bottom:6px;}
+  .upload-box .txt{font-size:13px; color:var(--muted);}
+  .preview{
+    margin-top:12px; display:none;
+  }
+  .preview img{
+    width:100%; border-radius:10px; border:1px solid var(--line); display:block;
+  }
+
+  button.submit{
+    width:100%; margin-top:6px;
+    background:var(--amber); color:#221600;
+    border:none; border-radius:10px;
+    font-family:'Archivo',sans-serif; font-weight:800; font-size:16px;
+    padding:15px 0; cursor:pointer;
+    box-shadow:0 6px 0 var(--amber-dim);
+    transition:transform .08s, box-shadow .08s;
+  }
+  button.submit:active{transform:translateY(4px); box-shadow:0 2px 0 var(--amber-dim);}
+  button.submit:disabled{
+    background:#3a4048; color:#7c8590; box-shadow:none; cursor:not-allowed;
+  }
+
+  .status-line{
+    display:flex; align-items:center; gap:8px; font-size:12px;
+    color:var(--muted); margin-top:12px; justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  /* success stamp screen */
+  .result{display:none; text-align:center; padding:10px 4px 4px;}
+  .stamp{
+    width:96px;height:96px;border-radius:50%;
+    border:4px solid var(--green); color:var(--green);
+    display:flex;align-items:center;justify-content:center;
+    font-size:44px; margin:6px auto 16px;
+    transform:rotate(-8deg) scale(0);
+    animation:stampin .38s cubic-bezier(.2,1.4,.4,1) forwards .05s;
+  }
+  @keyframes stampin{ to{ transform:rotate(-8deg) scale(1); } }
+  .result h2{margin:0 0 4px; font-size:19px;}
+  .result .sub{color:var(--muted); font-size:13px; margin-bottom:18px;}
+  .receipt{
+    text-align:left; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:14px 16px; font-family:'JetBrains Mono',monospace;
+    font-size:12.5px; line-height:2;
+  }
+  .receipt .row{display:flex; justify-content:space-between; gap:10px;}
+  .receipt .row span:first-child{color:var(--muted);}
+  .badge{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-weight:700;
+  }
+  .badge.ok{background:rgba(78,204,163,.15); color:var(--green);}
+  .badge.late{background:rgba(229,88,107,.15); color:var(--red);}
+
+  .again{
+    margin-top:16px; width:100%; background:transparent; color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:12px 0;
+    font-family:'Archivo',sans-serif; font-weight:700; cursor:pointer;
+  }
+
+  .error-box{
+    display:none; background:rgba(229,88,107,.1); border:1px solid var(--red);
+    color:var(--red); border-radius:10px; padding:12px 14px; font-size:13px;
+    margin-top:14px;
+  }
+
+  footer{
+    text-align:center; margin-top:16px; font-size:11px; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; letter-spacing:.03em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <span class="eyebrow">Field Ops · Punch In/Out</span>
+      <h1>Absensi Operator</h1>
+    </div>
+    <div class="clock" id="clock">--:--:--<span class="date" id="clockDate">-</span></div>
+  </header>
+
+  <div class="card">
+
+    <form id="form">
+      <div class="field">
+        <label for="nama">Nama Operator</label>
+        <div class="select-wrap">
+          <select id="nama" required>
+            <option value="" disabled selected>Pilih nama Anda</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Jenis Absen</label>
+        <div class="segmented" id="jenisAbsen">
+          <button type="button" data-val="Masuk" class="masuk active">MASUK</button>
+          <button type="button" data-val="Keluar" class="keluar">KELUAR</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="site">Site</label>
+        <div class="select-wrap">
+          <select id="site" required>
+            <option value="" disabled selected>Pilih lokasi site</option>
+          </select>
+        </div>
+        <div class="std-box" id="stdBox"></div>
+      </div>
+
+      <div class="field">
+        <label>Foto (harus ada geotag lokasi)</label>
+        <div class="upload-box" id="uploadBox">
+          <div class="ico">📷</div>
+          <div class="txt">Ketuk untuk ambil / pilih foto</div>
+          <input type="file" id="photo" accept="image/*" capture="environment" required>
+        </div>
+        <div class="preview" id="preview"><img id="previewImg" alt="Preview foto"></div>
+        <div class="hint" id="gpsHint"></div>
+      </div>
+
+      <button type="submit" class="submit" id="submitBtn" disabled>Rekam Absen</button>
+      <div class="status-line" id="statusLine"></div>
+      <div class="error-box" id="errorBox"></div>
+    </form>
+
+    <div class="result" id="result">
+      <div class="stamp">✓</div>
+      <h2 id="resultTitle">Absen Tercatat</h2>
+      <div class="sub" id="resultSub">Data & foto sedang disimpan ke OneDrive</div>
+      <div class="receipt" id="receipt"></div>
+      <button class="again" id="againBtn">Absen Lagi</button>
+    </div>
+
+  </div>
+
+  <footer>Simpan link ini di HP Anda · muncul otomatis tiap kali dibuka</footer>
+</div>
+
+<script>
+/* ======================= KONFIGURASI ======================= */
+// Ganti URL ini dengan "Web App URL" hasil deploy Google Apps Script Anda
+// (bentuknya: https://script.google.com/macros/s/XXXXXXX/exec)
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmL0OatxLdcAo0o40eLwE8foEa33PUUqlcDSeRjMvwMX0simtJo6arjVcvY4L2FbRLqw/exec";
+
+const OPERATORS = [
+  "Ipan","Jeni","Fauzi","Adit","Zidny","Pajry","Hasan","Jamal","Pakih","Riana","Umar","Irgi"
+];
+
+// jam dalam format "HH:MM"
+const SITES = {
+  "SMLP Sudirman":  { masuk:"08:00", keluar:"17:00" },
+  "ITC BSD":        { masuk:"08:00", masukSabtu:"13:30", keluar:"17:00" },
+  "BSD Junction":   { masuk:"08:00", masukSabtu:"13:30", keluar:"17:00" },
+  "CMMG":           { masuk:"08:30", keluar:"16:45" },
+  "The Breeze":     { masuk:"08:00", keluar:"17:00" },
+  "M2M":            { masuk:"08:00", keluar:"17:00" },
+  "Aerium":         { masuk:"08:00", keluar:"17:00" }
+};
+/* ============================================================= */
+
+let state = { jenis: "Masuk", photoFile:null, photoBase64:null, gps:null, gpsSource:null };
+
+// isi dropdown
+const namaSel = document.getElementById('nama');
+OPERATORS.forEach(n=>{
+  const o=document.createElement('option'); o.value=n; o.textContent=n; namaSel.appendChild(o);
+});
+const siteSel = document.getElementById('site');
+Object.keys(SITES).forEach(s=>{
+  const o=document.createElement('option'); o.value=s; o.textContent=s; siteSel.appendChild(o);
+});
+
+// jam
+function tick(){
+  const now = new Date();
+  document.getElementById('clock').childNodes[0].nodeValue =
+    now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clockDate').textContent =
+    now.toLocaleDateString('id-ID',{weekday:'short', day:'2-digit', month:'short'});
+}
+tick(); setInterval(tick,1000);
+
+// segmented control
+document.querySelectorAll('#jenisAbsen button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.jenis = btn.dataset.val;
+    updateStdBox();
+    validate();
+  });
+});
+
+function isSaturday(){ return new Date().getDay() === 6; }
+
+function getStandardTime(siteName, jenis){
+  const s = SITES[siteName];
+  if(!s) return null;
+  if(jenis === "Masuk"){
+    if(s.masukSabtu && isSaturday()) return s.masukSabtu;
+    return s.masuk;
+  }
+  return s.keluar;
+}
+
+function updateStdBox(){
+  const box = document.getElementById('stdBox');
+  const site = siteSel.value;
+  if(!site){ box.style.display='none'; return; }
+  const std = getStandardTime(site, state.jenis);
+  const label = state.jenis === "Masuk" ? "Jam masuk standar" : "Jam pulang standar";
+  let note = "";
+  if(state.jenis==="Masuk" && SITES[site].masukSabtu && isSaturday()){
+    note = " (jadwal Sabtu)";
+  }
+  box.innerHTML = `${label}${note} untuk <b>${site}</b>: <b>${std}</b> WIB`;
+  box.style.display = 'block';
+}
+siteSel.addEventListener('change', ()=>{ updateStdBox(); validate(); });
+namaSel.addEventListener('change', validate);
+
+// resize + kompres foto sebelum diupload, supaya hemat storage Drive
+function resizeImage(file, maxDim = 1280, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height) {
+        if (width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+      } else {
+        if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        if (!blob) return reject(new Error("Gagal memproses foto"));
+        resolve(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => reject(new Error("Gagal membuka foto"));
+    img.src = url;
+  });
+}
+
+// upload foto + baca EXIF GPS + kompres
+const photoInput = document.getElementById('photo');
+const gpsHint = document.getElementById('gpsHint');
+photoInput.addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  state.photoFile = file;
+  state.gps = null; state.gpsSource = null;
+
+  gpsHint.textContent = "Memproses foto...";
+  gpsHint.className = "hint";
+
+  // 1. baca GPS dari EXIF foto ASLI (sebelum dikompres, EXIF hanya ada di file asli)
+  try{
+    const gps = await exifr.gps(file);
+    if(gps && gps.latitude && gps.longitude){
+      state.gps = { lat: gps.latitude, lng: gps.longitude };
+      state.gpsSource = "EXIF Foto";
+    }
+  }catch(err){ /* tidak ada geotag, ditangani di bawah */ }
+
+  // 2. resize + kompres foto untuk hemat ukuran upload
+  let outputBlob;
+  try{
+    outputBlob = await resizeImage(file, 1280, 0.7);
+  }catch(err){
+    outputBlob = file; // kalau gagal, pakai file asli sebagai fallback
+  }
+
+  // 3. tampilkan preview + siapkan base64 dari hasil kompres
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    document.getElementById('previewImg').src = reader.result;
+    document.getElementById('preview').style.display = 'block';
+    state.photoBase64 = reader.result.split(',')[1];
+  };
+  reader.readAsDataURL(outputBlob);
+
+  const origKB = (file.size/1024).toFixed(0);
+  const newKB = (outputBlob.size/1024).toFixed(0);
+  const sizeMsg = `Ukuran foto: ${origKB} KB → ${newKB} KB setelah dikompres.`;
+
+  if(state.gps){
+    gpsHint.innerHTML = `📍 Geotag terdeteksi: ${state.gps.lat.toFixed(5)}, ${state.gps.lng.toFixed(5)}<br>${sizeMsg}`;
+    gpsHint.className = "hint ok";
+  } else {
+    gpsHint.innerHTML = `⚠️ Foto ini tidak memiliki data lokasi (geotag). Pastikan GPS/Lokasi aktif saat memotret. Absen tetap bisa dikirim.<br>${sizeMsg}`;
+    gpsHint.className = "hint warn";
+  }
+  validate();
+});
+
+function validate(){
+  const ok = namaSel.value && siteSel.value && state.photoFile;
+  document.getElementById('submitBtn').disabled = !ok;
+}
+
+// submit
+document.getElementById('form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const statusLine = document.getElementById('statusLine');
+  const errorBox = document.getElementById('errorBox');
+  errorBox.style.display='none';
+
+  if(!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.startsWith("PASTE_URL")){
+    errorBox.textContent = "Website belum terhubung ke server. Hubungi admin untuk memasang URL Google Apps Script.";
+    errorBox.style.display='block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Mengirim...";
+  statusLine.textContent = "Mengunggah foto & menyimpan data, mohon tunggu...";
+
+  const now = new Date();
+  const site = siteSel.value;
+  const nama = namaSel.value;
+  const jenis = state.jenis;
+  const std = getStandardTime(site, jenis);
+  const jamAktual = now.toTimeString().slice(0,5);
+
+  const [sh,sm] = std.split(':').map(Number);
+  const [ah,am] = jamAktual.split(':').map(Number);
+  const diffMin = (ah*60+am) - (sh*60+sm);
+
+  let statusTelat = "Tepat Waktu";
+  let menitTelat = 0;
+  if(jenis === "Masuk" && diffMin > 0){ statusTelat = "Telat"; menitTelat = diffMin; }
+  if(jenis === "Keluar" && diffMin < 0){ statusTelat = "Pulang Cepat"; menitTelat = Math.abs(diffMin); }
+
+  // bikin nama file yang rapi: Nama_Jenis_Site_Tanggal_Jam.jpg
+  function slugify(text){
+    return text.trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'');
+  }
+  const tanggalStr = now.toISOString().slice(0,10); // YYYY-MM-DD
+  const jamFileStr = jamAktual.replace(':','.');    // 08.15
+  const generatedFileName =
+    `${slugify(nama)}_${slugify(jenis)}_${slugify(site)}_${tanggalStr}_${jamFileStr}.jpg`;
+
+  const payload = {
+    timestamp: now.toISOString(),
+    nama, jenisAbsen: jenis, site,
+    jamStandar: std, jamAktual,
+    statusTelat, menitTelat,
+    gpsLat: state.gps ? state.gps.lat : null,
+    gpsLng: state.gps ? state.gps.lng : null,
+    sumberGps: state.gpsSource || "Tidak ada",
+    fileName: generatedFileName,
+    mimeType: "image/jpeg",
+    fileContentBase64: state.photoBase64
+  };
+
+  try{
+    // Content-Type text/plain sengaja dipakai (bukan application/json) supaya
+    // browser tidak mengirim CORS preflight request, karena Google Apps Script
+    // Web App tidak menangani preflight OPTIONS dengan baik. Isi body tetap JSON.
+    const res = await fetch(GOOGLE_SCRIPT_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const resJson = await res.json();
+    if(resJson.status !== "ok") throw new Error(resJson.message || "Server menolak data");
+
+    // tampilkan hasil
+    document.getElementById('form').style.display='none';
+    const badgeClass = statusTelat === "Tepat Waktu" ? "ok" : "late";
+    document.getElementById('resultTitle').textContent =
+      jenis === "Masuk" ? "Absen Masuk Tercatat" : "Absen Keluar Tercatat";
+    document.getElementById('resultSub').textContent = `${nama} · ${site}`;
+    document.getElementById('receipt').innerHTML = `
+      <div class="row"><span>Jenis</span><span>${jenis}</span></div>
+      <div class="row"><span>Site</span><span>${site}</span></div>
+      <div class="row"><span>Jam Standar</span><span>${std}</span></div>
+      <div class="row"><span>Jam Aktual</span><span>${jamAktual}</span></div>
+      <div class="row"><span>Status</span><span class="badge ${badgeClass}">${statusTelat}${menitTelat?` (${menitTelat} mnt)`:''}</span></div>
+      <div class="row"><span>Lokasi Foto</span><span>${state.gps ? 'Ada' : 'Tidak Ada'}</span></div>
+    `;
+    document.getElementById('result').style.display='block';
+  }catch(err){
+    errorBox.textContent = "Gagal mengirim absen. Periksa koneksi internet lalu coba lagi. (" + err.message + ")";
+    errorBox.style.display='block';
+    btn.disabled = false;
+    btn.textContent = "Rekam Absen";
+    statusLine.textContent = "";
+  }
+});
+
+document.getElementById('againBtn').addEventListener('click', ()=>{
+  document.getElementById('form').reset();
+  document.getElementById('form').style.display='block';
+  document.getElementById('result').style.display='none';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('stdBox').style.display='none';
+  gpsHint.textContent=''; state = { jenis:"Masuk", photoFile:null, photoBase64:null, gps:null, gpsSource:null };
+  document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
+  document.querySelector('#jenisAbsen button.masuk').classList.add('active');
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').textContent = "Rekam Absen";
+  document.getElementById('statusLine').textContent = "";
+});
+</script>
+</body>
+</html>
