@@ -81,7 +81,7 @@
   }
   .field{margin-bottom:16px;}
 
-  select, input[type="file"]{
+  select, input[type="file"], textarea{
     width:100%;
     background:var(--panel-2);
     border:1px solid var(--line);
@@ -93,6 +93,7 @@
     appearance:none;
     -webkit-appearance:none;
   }
+  textarea{ resize:vertical; min-height:90px; line-height:1.5; }
   select:focus, input:focus{outline:2px solid var(--amber); outline-offset:1px;}
   .select-wrap{position:relative;}
   .select-wrap::after{
@@ -248,12 +249,17 @@
         <div class="std-box" id="stdBox"></div>
       </div>
 
+      <div class="field" id="kegiatanField" style="display:none;">
+        <label for="kegiatan">Kegiatan Harian (wajib diisi)</label>
+        <textarea id="kegiatan" rows="4" placeholder="Tuliskan pekerjaan/kegiatan yang dilakukan hari ini..."></textarea>
+      </div>
+
       <div class="field">
         <label>Foto (harus ada geotag lokasi)</label>
         <div class="upload-box" id="uploadBox">
           <div class="ico">📷</div>
-          <div class="txt">Ketuk untuk ambil / pilih foto</div>
-          <input type="file" id="photo" accept="image/*" capture="environment" required>
+          <div class="txt">Ketuk untuk ambil foto / pilih dari galeri</div>
+          <input type="file" id="photo" accept="image/*" required>
         </div>
         <div class="preview" id="preview"><img id="previewImg" alt="Preview foto"></div>
         <div class="hint" id="gpsHint"></div>
@@ -281,10 +287,10 @@
 /* ======================= KONFIGURASI ======================= */
 // Ganti URL ini dengan "Web App URL" hasil deploy Google Apps Script Anda
 // (bentuknya: https://script.google.com/macros/s/XXXXXXX/exec)
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmL0OatxLdcAo0o40eLwE8foEa33PUUqlcDSeRjMvwMX0simtJo6arjVcvY4L2FbRLqw/exec";
+const GOOGLE_SCRIPT_URL = "PASTE_URL_WEB_APP_GOOGLE_APPS_SCRIPT_DI_SINI";
 
 const OPERATORS = [
-  "Ipan","Jeni","Fauzi","Adit","Zidny","Pajry","Hasan","Jamal","Pakih","Riana","Umar","Irgi"
+  "Ipan","Jeni","Fauzi","Adit","Zidny","Pajry","Hasan","Jamal","Pakih","Riana","Umar","Irgi","Roni"
 ];
 
 // jam dalam format "HH:MM"
@@ -295,8 +301,8 @@ const SITES = {
   "CMMG":           { masuk:"08:30", keluar:"16:45" },
   "The Breeze":     { masuk:"08:00", keluar:"17:00" },
   "M2M":            { masuk:"08:00", keluar:"17:00" },
-  "Aerium":         { masuk:"08:00", keluar:"17:00" },
-  "Wander Alley":   { masuk:"08:30", keluar:"17:30" }   // ← tinggal isi jamnya
+  "Aerium":         { masuk:"08:00", keluar:"17:00" }.
+  "Wander Alley":   { masuk:"08:30", keluar:"17:30"}
 };
 /* ============================================================= */
 
@@ -323,11 +329,14 @@ function tick(){
 tick(); setInterval(tick,1000);
 
 // segmented control
+const kegiatanField = document.getElementById('kegiatanField');
+const kegiatanInput = document.getElementById('kegiatan');
 document.querySelectorAll('#jenisAbsen button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     state.jenis = btn.dataset.val;
+    kegiatanField.style.display = state.jenis === "Keluar" ? "block" : "none";
     updateStdBox();
     validate();
   });
@@ -440,9 +449,13 @@ photoInput.addEventListener('change', async (e)=>{
 });
 
 function validate(){
-  const ok = namaSel.value && siteSel.value && state.photoFile;
+  let ok = namaSel.value && siteSel.value && state.photoFile;
+  if(state.jenis === "Keluar"){
+    ok = ok && kegiatanInput.value.trim().length > 0;
+  }
   document.getElementById('submitBtn').disabled = !ok;
 }
+kegiatanInput.addEventListener('input', validate);
 
 // submit
 document.getElementById('form').addEventListener('submit', async (e)=>{
@@ -497,7 +510,8 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
     sumberGps: state.gpsSource || "Tidak ada",
     fileName: generatedFileName,
     mimeType: "image/jpeg",
-    fileContentBase64: state.photoBase64
+    fileContentBase64: state.photoBase64,
+    kegiatanHarian: state.jenis === "Keluar" ? kegiatanInput.value.trim() : ""
   };
 
   try{
@@ -526,6 +540,7 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
       <div class="row"><span>Jam Aktual</span><span>${jamAktual}</span></div>
       <div class="row"><span>Status</span><span class="badge ${badgeClass}">${statusTelat}${menitTelat?` (${menitTelat} mnt)`:''}</span></div>
       <div class="row"><span>Lokasi Foto</span><span>${state.gps ? 'Ada' : 'Tidak Ada'}</span></div>
+      ${jenis === "Keluar" ? `<div class="row" style="display:block;"><span>Kegiatan Harian</span><div style="color:var(--text); margin-top:4px; white-space:pre-wrap;">${payload.kegiatanHarian.replace(/</g,'&lt;')}</div></div>` : ''}
     `;
     document.getElementById('result').style.display='block';
   }catch(err){
@@ -544,6 +559,7 @@ document.getElementById('againBtn').addEventListener('click', ()=>{
   document.getElementById('preview').style.display='none';
   document.getElementById('stdBox').style.display='none';
   gpsHint.textContent=''; state = { jenis:"Masuk", photoFile:null, photoBase64:null, gps:null, gpsSource:null };
+  kegiatanField.style.display = 'none';
   document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
   document.querySelector('#jenisAbsen button.masuk').classList.add('active');
   document.getElementById('submitBtn').disabled = true;
