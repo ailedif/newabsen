@@ -202,6 +202,21 @@
     margin-top:14px;
   }
 
+  /* grid preview multi-foto dokumentasi kegiatan */
+  .preview-grid{
+    display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;
+  }
+  .preview-grid .thumb{
+    width:64px; height:64px; border-radius:8px; overflow:hidden;
+    border:1px solid var(--line); position:relative; background:var(--panel-2);
+  }
+  .preview-grid .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .preview-grid .add-more{
+    width:64px; height:64px; border-radius:8px; border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); text-align:center;
+  }
+
   footer{
     text-align:center; margin-top:16px; font-size:11px; color:var(--muted);
     font-family:'JetBrains Mono',monospace; letter-spacing:.03em;
@@ -252,6 +267,17 @@
       <div class="field" id="kegiatanField" style="display:none;">
         <label for="kegiatan">Kegiatan Harian (wajib diisi)</label>
         <textarea id="kegiatan" rows="4" placeholder="Tuliskan pekerjaan/kegiatan yang dilakukan hari ini..."></textarea>
+      </div>
+
+      <div class="field" id="dokumentasiField" style="display:none;">
+        <label>Dokumentasi Kegiatan (wajib, boleh pilih banyak foto)</label>
+        <div class="upload-box" id="uploadBoxDokumentasi">
+          <div class="ico">🖼️</div>
+          <div class="txt">Ketuk untuk pilih foto dokumentasi dari galeri</div>
+          <input type="file" id="fotoDokumentasi" accept="image/*" multiple>
+        </div>
+        <div class="preview-grid" id="previewGridDokumentasi"></div>
+        <div class="hint" id="dokumentasiHint">Belum ada foto dipilih.</div>
       </div>
 
       <div class="field">
@@ -331,12 +357,15 @@ tick(); setInterval(tick,1000);
 // segmented control
 const kegiatanField = document.getElementById('kegiatanField');
 const kegiatanInput = document.getElementById('kegiatan');
+const dokumentasiField = document.getElementById('dokumentasiField');
 document.querySelectorAll('#jenisAbsen button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     state.jenis = btn.dataset.val;
-    kegiatanField.style.display = state.jenis === "Keluar" ? "block" : "none";
+    const isKeluar = state.jenis === "Keluar";
+    kegiatanField.style.display = isKeluar ? "block" : "none";
+    dokumentasiField.style.display = isKeluar ? "block" : "none";
     updateStdBox();
     validate();
   });
@@ -448,10 +477,69 @@ photoInput.addEventListener('change', async (e)=>{
   validate();
 });
 
+/* ---- Upload multi-foto Dokumentasi Kegiatan (muncul saat pilih Keluar) ---- */
+let dokumentasiPhotos = []; // { fileName, mimeType, base64, previewUrl }[]
+
+const fotoDokumentasiInput = document.getElementById('fotoDokumentasi');
+const previewGridDokumentasi = document.getElementById('previewGridDokumentasi');
+const dokumentasiHint = document.getElementById('dokumentasiHint');
+
+fotoDokumentasiInput.addEventListener('change', async (e)=>{
+  const files = Array.from(e.target.files || []);
+  if(files.length === 0) return;
+
+  dokumentasiHint.className = "hint";
+  dokumentasiHint.textContent = `Memproses ${files.length} foto...`;
+
+  for(const file of files){
+    let outputBlob;
+    try{
+      // dikompres lebih kecil dari foto absen (800px, kualitas 50%) karena bisa banyak foto sekaligus
+      outputBlob = await resizeImage(file, 800, 0.5);
+    }catch(err){
+      outputBlob = file;
+    }
+    const base64 = await new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(outputBlob);
+    });
+    dokumentasiPhotos.push({
+      fileName: 'foto.jpg',
+      mimeType: 'image/jpeg',
+      base64,
+      previewUrl: URL.createObjectURL(outputBlob)
+    });
+  }
+
+  renderPreviewGridDokumentasi();
+  dokumentasiHint.className = "hint ok";
+  dokumentasiHint.textContent = `${dokumentasiPhotos.length} foto dokumentasi siap dikirim (sudah dikompres).`;
+  validate();
+
+  fotoDokumentasiInput.value = ""; // reset supaya bisa nambah foto lagi tanpa hilang yang sudah dipilih
+});
+
+function renderPreviewGridDokumentasi(){
+  previewGridDokumentasi.innerHTML = '';
+  dokumentasiPhotos.forEach((p, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.innerHTML = `<img src="${p.previewUrl}" alt="Foto dokumentasi ${idx+1}">`;
+    previewGridDokumentasi.appendChild(div);
+  });
+  const addMore = document.createElement('div');
+  addMore.className = 'add-more';
+  addMore.textContent = '+ tambah';
+  addMore.addEventListener('click', ()=> fotoDokumentasiInput.click());
+  previewGridDokumentasi.appendChild(addMore);
+}
+
 function validate(){
   let ok = namaSel.value && siteSel.value && state.photoFile;
   if(state.jenis === "Keluar"){
-    ok = ok && kegiatanInput.value.trim().length > 0;
+    ok = ok && kegiatanInput.value.trim().length > 0 && dokumentasiPhotos.length > 0;
   }
   document.getElementById('submitBtn').disabled = !ok;
 }
@@ -511,7 +599,10 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
     fileName: generatedFileName,
     mimeType: "image/jpeg",
     fileContentBase64: state.photoBase64,
-    kegiatanHarian: state.jenis === "Keluar" ? kegiatanInput.value.trim() : ""
+    kegiatanHarian: state.jenis === "Keluar" ? kegiatanInput.value.trim() : "",
+    dokumentasiPhotos: state.jenis === "Keluar"
+      ? dokumentasiPhotos.map(p=>({ fileName: p.fileName, mimeType: p.mimeType, base64: p.base64 }))
+      : []
   };
 
   try{
@@ -541,6 +632,7 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
       <div class="row"><span>Status</span><span class="badge ${badgeClass}">${statusTelat}${menitTelat?` (${menitTelat} mnt)`:''}</span></div>
       <div class="row"><span>Lokasi Foto</span><span>${state.gps ? 'Ada' : 'Tidak Ada'}</span></div>
       ${jenis === "Keluar" ? `<div class="row" style="display:block;"><span>Kegiatan Harian</span><div style="color:var(--text); margin-top:4px; white-space:pre-wrap;">${payload.kegiatanHarian.replace(/</g,'&lt;')}</div></div>` : ''}
+      ${jenis === "Keluar" ? `<div class="row"><span>Dokumentasi</span><span>${payload.dokumentasiPhotos.length} foto tersimpan</span></div>` : ''}
     `;
     document.getElementById('result').style.display='block';
   }catch(err){
@@ -560,6 +652,10 @@ document.getElementById('againBtn').addEventListener('click', ()=>{
   document.getElementById('stdBox').style.display='none';
   gpsHint.textContent=''; state = { jenis:"Masuk", photoFile:null, photoBase64:null, gps:null, gpsSource:null };
   kegiatanField.style.display = 'none';
+  dokumentasiField.style.display = 'none';
+  dokumentasiPhotos = [];
+  previewGridDokumentasi.innerHTML = '';
+  dokumentasiHint.textContent = 'Belum ada foto dipilih.';
   document.querySelectorAll('#jenisAbsen button').forEach(b=>b.classList.remove('active'));
   document.querySelector('#jenisAbsen button.masuk').classList.add('active');
   document.getElementById('submitBtn').disabled = true;
