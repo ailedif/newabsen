@@ -425,6 +425,56 @@ function resizeImage(file, maxDim = 1280, quality = 0.7) {
   });
 }
 
+/**
+ * Kompres foto berulang (turunkan kualitas, lalu turunkan dimensi kalau perlu)
+ * sampai ukurannya di bawah maxSizeKB. Menjamin hasil akhir sekecil target,
+ * bukan cuma 1x kompres dengan angka kualitas tetap yang hasilnya bisa naik-turun
+ * tergantung kompleksitas foto aslinya.
+ */
+async function compressToMaxSize(file, maxSizeKB, startDim, minDim, startQuality, minQuality){
+  const maxBytes = maxSizeKB * 1024;
+  const url = URL.createObjectURL(file);
+
+  const img = await new Promise((resolve, reject)=>{
+    const im = new Image();
+    im.onload = ()=> resolve(im);
+    im.onerror = ()=> reject(new Error("Gagal membuka foto"));
+    im.src = url;
+  });
+
+  let dim = startDim;
+  let bestBlob = null;
+
+  while (dim >= minDim) {
+    let { width, height } = img;
+    if (width > height) {
+      if (width > dim) { height = Math.round(height * dim / width); width = dim; }
+    } else {
+      if (height > dim) { width = Math.round(width * dim / height); height = dim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+    let quality = startQuality;
+    while (quality >= minQuality) {
+      const blob = await new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/jpeg', quality));
+      if (blob) {
+        bestBlob = blob; // simpan hasil terkecil yang berhasil dicapai sejauh ini
+        if (blob.size <= maxBytes) {
+          URL.revokeObjectURL(url);
+          return blob; // sudah di bawah target, selesai
+        }
+      }
+      quality -= 0.1;
+    }
+    dim -= 200; // kualitas minimum masih kegedean -> perkecil dimensi, ulangi
+  }
+
+  URL.revokeObjectURL(url);
+  return bestBlob; // hasil terkecil yang bisa dicapai (kasus ekstrem, jarang kejadian)
+}
+
 // upload foto + baca EXIF GPS + kompres
 const photoInput = document.getElementById('photo');
 const gpsHint = document.getElementById('gpsHint');
@@ -446,10 +496,10 @@ photoInput.addEventListener('change', async (e)=>{
     }
   }catch(err){ /* tidak ada geotag, ditangani di bawah */ }
 
-  // 2. resize + kompres foto untuk hemat ukuran upload
+  // 2. resize + kompres foto berulang sampai maksimal 100KB
   let outputBlob;
   try{
-    outputBlob = await resizeImage(file, 1280, 0.7);
+    outputBlob = await compressToMaxSize(file, 100, 1280, 500, 0.8, 0.3);
   }catch(err){
     outputBlob = file; // kalau gagal, pakai file asli sebagai fallback
   }
@@ -491,11 +541,14 @@ fotoDokumentasiInput.addEventListener('change', async (e)=>{
   dokumentasiHint.className = "hint";
   dokumentasiHint.textContent = `Memproses ${files.length} foto...`;
 
-  for(const file of files){
+  // Kompres semua foto SEKALIGUS (paralel), bukan satu-satu berurutan.
+  // Browser modern bisa encode beberapa gambar bersamaan di background,
+  // jadi 15 foto tidak lagi = 15x waktu tunggu foto pertama.
+  const results = await Promise.all(files.map(async (file) => {
     let outputBlob;
     try{
-      // dikompres lebih kecil dari foto absen (800px, kualitas 50%) karena bisa banyak foto sekaligus
-      outputBlob = await resizeImage(file, 800, 0.5);
+      // dikompres berulang sampai maksimal 100KB, berapa pun resolusi/ukuran aslinya
+      outputBlob = await compressToMaxSize(file, 100, 1000, 400, 0.75, 0.3);
     }catch(err){
       outputBlob = file;
     }
@@ -505,13 +558,15 @@ fotoDokumentasiInput.addEventListener('change', async (e)=>{
       reader.onerror = reject;
       reader.readAsDataURL(outputBlob);
     });
-    dokumentasiPhotos.push({
+    return {
       fileName: 'foto.jpg',
       mimeType: 'image/jpeg',
       base64,
       previewUrl: URL.createObjectURL(outputBlob)
-    });
-  }
+    };
+  }));
+
+  dokumentasiPhotos.push(...results);
 
   renderPreviewGridDokumentasi();
   dokumentasiHint.className = "hint ok";
