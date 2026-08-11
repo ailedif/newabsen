@@ -660,18 +660,43 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
       : []
   };
 
+  // kirim data dengan auto-retry kalau gagal karena masalah jaringan
+  const MAX_ATTEMPTS = 3;
+  const RETRY_DELAY_MS = 2000;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  async function sendWithRetry(payload){
+    let lastError;
+    for(let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
+      if(attempt > 1){
+        btn.textContent = `Mengirim... (percobaan ${attempt}/${MAX_ATTEMPTS})`;
+        statusLine.textContent = "Koneksi sempat terputus, mencoba mengirim ulang...";
+        await sleep(RETRY_DELAY_MS);
+      }
+      try{
+        // Content-Type text/plain sengaja dipakai (bukan application/json) supaya
+        // browser tidak mengirim CORS preflight request, karena Google Apps Script
+        // Web App tidak menangani preflight OPTIONS dengan baik. Isi body tetap JSON.
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify(payload)
+        });
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        const resJson = await res.json();
+        if(resJson.status !== "ok") throw new Error(resJson.message || "Server menolak data");
+        return resJson; // sukses
+      }catch(err){
+        lastError = err;
+        // kalau server menolak data (bukan soal jaringan), langsung berhenti, tidak perlu retry
+        if(err.message && err.message.startsWith("Server menolak")) throw err;
+      }
+    }
+    throw lastError; // sudah dicoba MAX_ATTEMPTS kali, tetap gagal
+  }
+
   try{
-    // Content-Type text/plain sengaja dipakai (bukan application/json) supaya
-    // browser tidak mengirim CORS preflight request, karena Google Apps Script
-    // Web App tidak menangani preflight OPTIONS dengan baik. Isi body tetap JSON.
-    const res = await fetch(GOOGLE_SCRIPT_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const resJson = await res.json();
-    if(resJson.status !== "ok") throw new Error(resJson.message || "Server menolak data");
+    await sendWithRetry(payload);
 
     // tampilkan hasil
     document.getElementById('form').style.display='none';
@@ -691,7 +716,7 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
     `;
     document.getElementById('result').style.display='block';
   }catch(err){
-    errorBox.textContent = "Gagal mengirim absen. Periksa koneksi internet lalu coba lagi. (" + err.message + ")";
+    errorBox.textContent = "Gagal mengirim absen setelah beberapa kali percobaan. Periksa sinyal Anda lalu coba lagi. (" + err.message + ")";
     errorBox.style.display='block';
     btn.disabled = false;
     btn.textContent = "Rekam Absen";
